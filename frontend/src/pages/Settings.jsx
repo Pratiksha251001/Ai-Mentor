@@ -1,6 +1,6 @@
-// frontend/src/pages/Settings.jsx
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useSidebar } from "../context/SidebarContext";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import {
@@ -12,36 +12,49 @@ import {
   Camera,
   Eye,
   EyeOff,
+  Contact,
 } from "lucide-react";
 import axios from "axios";
 import { useTheme } from "../context/ThemeContext";
-import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n/index.js";
+import toast from "react-hot-toast";
 
 const NAV_KEYS = [
   { icon: User, key: "profile", labelKey: "settings.nav.profile" },
   { icon: Bell, key: "notifications", labelKey: "settings.nav.notifications" },
-  { icon: Shield, key: "password_security", labelKey: "settings.nav.password_security" },
+  {
+    icon: Shield,
+    key: "password_security",
+    labelKey: "settings.nav.password_security",
+  },
   { icon: Palette, key: "appearance", labelKey: "settings.nav.appearance" },
   { icon: Globe, key: "language", labelKey: "settings.nav.language" },
+  { icon: Contact, key: "contactus", labelKey: "settings.nav.contactus" },
 ];
 
 export default function Settings() {
   const { t } = useTranslation();
-  const [originalNotifications, setOriginalNotifications] = useState(null);
+  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed } =
+    useSidebar();
   const { theme, setTheme } = useTheme();
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { user, updateUser, fetchUserProfile } = useAuth();
+
   const [activeSetting, setActiveSetting] = useState("profile");
-  const { user, updateUser, fetchUserProfile  } = useAuth();
+  const [contactForm, setContactForm] = useState({ subject: "", message: "" });
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [profilepopup, setProfilePopup] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     bio: "",
   });
+
   const [settingsData, setSettingsData] = useState({
     notifications: {
       emailNotifications: true,
@@ -58,10 +71,7 @@ export default function Settings() {
       language: "en",
     },
   });
-  const [loading, setLoading] = useState(false);
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [profilepopup, setProfilePopup] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
+
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -93,23 +103,49 @@ export default function Settings() {
         },
       });
 
-      console.log("✅ Backend response:", response.data);
-
-      // 🔥 FIX 1: Update context FIRST with fresh data
       updateUser(response.data);
-
-      // 🔥 FIX 2: Wait for state to update, THEN fetch (or skip fetch entirely)
       setTimeout(async () => {
-        await fetchUserProfile(); // This will now return avatar_url!
-        console.log("🔄 Refetched user:", JSON.parse(localStorage.getItem("user")));
+        await fetchUserProfile();
       }, 500);
 
       setAvatarFile(null);
       toast.success("Profile updated successfully!");
       setProfilePopup(true);
     } catch (error) {
-      console.error("❌ Error updating profile:", error.response?.data || error);
+      console.error("Error updating profile:", error.response?.data || error);
       toast.error("Failed to update profile.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleContactSubmit = async () => {
+    if (!contactForm.subject || !contactForm.message) {
+      return toast.error("Please enter a subject and message.");
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        "/api/contact",
+        {
+          email: user?.email,
+          subject: contactForm.subject,
+          message: contactForm.message,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      if (response.data.success) {
+        toast.success("Message sent successfully!");
+        setContactForm({ subject: "", message: "" });
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Something went wrong on the server.");
     } finally {
       setLoading(false);
     }
@@ -128,7 +164,6 @@ export default function Settings() {
     }
   }, [user]);
 
-  // Fetch current settings on mount
   useEffect(() => {
     const fetchNotificationSettings = async () => {
       if (!user) return;
@@ -137,7 +172,6 @@ export default function Settings() {
         const { data } = await axios.get("/api/users/settings", {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         setSettingsData(data);
         if (data?.appearance?.language) {
           i18n.changeLanguage(data.appearance.language);
@@ -146,7 +180,6 @@ export default function Settings() {
         console.error("Failed to fetch notification settings:", err);
       }
     };
-
     fetchNotificationSettings();
   }, [user]);
 
@@ -163,8 +196,7 @@ export default function Settings() {
       />
 
       <div
-        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 mt-3 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-80"
-          }`}
+        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 mt-3 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-80"}`}
       >
         <div className="flex flex-1 mt-15">
           {/* Settings Sidebar */}
@@ -198,7 +230,7 @@ export default function Settings() {
           <main className="flex-1 p-8 mt-5">
             {activeSetting === "profile" && (
               <div className="max-w-[896px]">
-                {/* Header */}
+                {/* Profile content - existing JSX from original */}
                 <div className="mb-8">
                   <h1 className="text-[30px] font-bold text-main font-[Inter] mb-2">
                     {t("settings.profile.title")}
@@ -207,11 +239,9 @@ export default function Settings() {
                     {t("settings.profile.subtitle")}
                   </p>
                 </div>
-
-                {/* Settings Card */}
                 <div className="bg-card rounded-[24px] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)] p-8">
+                  {/* Avatar + Form - keep original JSX structure */}
                   <div className="flex gap-8 mb-8">
-                    {/* Avatar Section */}
                     <div className="flex flex-col items-center">
                       <div className="relative mb-6">
                         <img
@@ -225,7 +255,6 @@ export default function Settings() {
                           alt="Profile"
                           className="w-32 h-32 rounded-full border-4 border-[rgba(255,135,89,0.65)] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)]"
                         />
-
                         <label className="absolute bottom-2 right-2 w-10 h-10 bg-[#475569] rounded-full flex items-center justify-center cursor-pointer shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)]">
                           <Camera className="w-[14px] h-[14px] text-white" />
                           <input
@@ -243,10 +272,7 @@ export default function Settings() {
                         {t("common.premium_member")}
                       </p>
                     </div>
-
-                    {/* Form Section */}
                     <div className="flex-1 space-y-6">
-                      {/* First and Last Name */}
                       <div className="grid grid-cols-2 gap-6">
                         <div className="relative">
                           <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">
@@ -275,8 +301,6 @@ export default function Settings() {
                           />
                         </div>
                       </div>
-
-                      {/* Email */}
                       <div className="relative">
                         <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">
                           {t("settings.profile.email")}
@@ -290,8 +314,6 @@ export default function Settings() {
                           className="w-full h-[50px] px-4 rounded-xl border border-border text-[16px] font-[Inter] focus:ring-2 focus:ring-primary focus:border-primary bg-input text-main"
                         />
                       </div>
-
-                      {/* Bio */}
                       <div className="relative">
                         <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">
                           {t("settings.profile.bio")}
@@ -306,8 +328,6 @@ export default function Settings() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Action Buttons */}
                   <div className="flex justify-end gap-4 pt-6 border-t border-border">
                     <button
                       type="button"
@@ -340,15 +360,39 @@ export default function Settings() {
                 <div className="bg-card rounded-[24px] shadow p-8">
                   <div className="space-y-6">
                     {[
-                      { labelKey: "settings.notifications.email", key: "emailNotifications", descKey: "settings.notifications.email_desc" },
-                      { labelKey: "settings.notifications.push", key: "pushNotifications", descKey: "settings.notifications.push_desc" },
-                      { labelKey: "settings.notifications.course_updates", key: "courseUpdates", descKey: "settings.notifications.course_updates_desc" },
-                      { labelKey: "settings.notifications.discussion_replies", key: "discussionReplies", descKey: "settings.notifications.discussion_replies_desc" },
+                      {
+                        labelKey: "settings.notifications.email",
+                        key: "emailNotifications",
+                        descKey: "settings.notifications.email_desc",
+                      },
+                      {
+                        labelKey: "settings.notifications.push",
+                        key: "pushNotifications",
+                        descKey: "settings.notifications.push_desc",
+                      },
+                      {
+                        labelKey: "settings.notifications.course_updates",
+                        key: "courseUpdates",
+                        descKey: "settings.notifications.course_updates_desc",
+                      },
+                      {
+                        labelKey: "settings.notifications.discussion_replies",
+                        key: "discussionReplies",
+                        descKey:
+                          "settings.notifications.discussion_replies_desc",
+                      },
                     ].map((item) => (
-                      <div key={item.key} className="flex items-center justify-between">
+                      <div
+                        key={item.key}
+                        className="flex items-center justify-between"
+                      >
                         <div>
-                          <h3 className="text-[16px] font-semibold text-main">{t(item.labelKey)}</h3>
-                          <p className="text-[14px] text-muted">{t(item.descKey)}</p>
+                          <h3 className="text-[16px] font-semibold text-main">
+                            {t(item.labelKey)}
+                          </h3>
+                          <p className="text-[14px] text-muted">
+                            {t(item.descKey)}
+                          </p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -376,7 +420,10 @@ export default function Settings() {
                       type="button"
                       onClick={() => {
                         if (originalNotifications)
-                          setSettingsData((prev) => ({ ...prev, notifications: originalNotifications }));
+                          setSettingsData((prev) => ({
+                            ...prev,
+                            notifications: originalNotifications,
+                          }));
                       }}
                       className="h-[50px] px-6 rounded-xl border border-border bg-card text-main hover:bg-canvas-alt"
                     >
@@ -393,15 +440,20 @@ export default function Settings() {
                             {
                               notifications: { ...settingsData.notifications },
                             },
-                            { headers: { Authorization: `Bearer ${token}` } }
+                            { headers: { Authorization: `Bearer ${token}` } },
                           );
 
-
-                          toast.success("Notification settings updated successfully!");
-                          setOriginalNotifications({ ...settingsData.notifications });
+                          toast.success(
+                            "Notification settings updated successfully!",
+                          );
+                          setOriginalNotifications({
+                            ...settingsData.notifications,
+                          });
                         } catch (error) {
                           console.error("Error updating settings:", error);
-                          toast.error("Failed to update settings. Please try again.");
+                          toast.error(
+                            "Failed to update settings. Please try again.",
+                          );
                         } finally {
                           setLoading(false);
                         }
@@ -495,6 +547,7 @@ export default function Settings() {
                           </label>
                           <input
                             type={showCurrentPassword ? "text" : "password"}
+                            autoComplete="current-password"
                             value={passwordData.currentPassword}
                             onChange={(e) =>
                               setPasswordData((prev) => ({
@@ -525,6 +578,7 @@ export default function Settings() {
                           </label>
                           <input
                             type={showNewPassword ? "text" : "password"}
+                            autoComplete="new-password"
                             value={passwordData.newPassword}
                             onChange={(e) =>
                               setPasswordData((prev) => ({
@@ -536,9 +590,7 @@ export default function Settings() {
                           />
                           <button
                             type="button"
-                            onClick={() =>
-                              setShowNewPassword(!showNewPassword)
-                            }
+                            onClick={() => setShowNewPassword(!showNewPassword)}
                             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted hover:text-main"
                           >
                             {showNewPassword ? (
@@ -547,15 +599,16 @@ export default function Settings() {
                               <Eye className="w-5 h-5" />
                             )}
                           </button>
-
                         </div>
 
                         <div className="relative">
                           <label className="absolute -top-2 left-4 bg-card px-2 text-[14px] text-muted font-medium font-[Inter]">
                             {t("settings.security.confirm_password")}
                           </label>
+
                           <input
                             type="password"
+                            autoComplete="new-password"
                             value={passwordData.confirmPassword}
                             onChange={(e) =>
                               setPasswordData((prev) => ({
@@ -592,9 +645,11 @@ export default function Settings() {
                           await axios.put(
                             "/api/users/settings",
                             { security: settingsData.security },
-                            { headers: { Authorization: `Bearer ${token}` } }
+                            { headers: { Authorization: `Bearer ${token}` } },
                           );
-                          toast.success("Security settings updated successfully!");
+                          toast.success(
+                            "Security settings updated successfully!",
+                          );
                           setPasswordData({
                             currentPassword: "",
                             newPassword: "",
@@ -602,7 +657,9 @@ export default function Settings() {
                           });
                         } catch (error) {
                           console.error("Error updating settings:", error);
-                          toast.error("Failed to update settings. Please try again.");
+                          toast.error(
+                            "Failed to update settings. Please try again.",
+                          );
                         } finally {
                           setLoading(false);
                         }
@@ -635,9 +692,21 @@ export default function Settings() {
                       </h3>
                       <div className="grid grid-cols-3 gap-4">
                         {[
-                          { value: "light", labelKey: "settings.appearance.light", icon: "☀️" },
-                          { value: "dark", labelKey: "settings.appearance.dark", icon: "🌙" },
-                          { value: "auto", labelKey: "settings.appearance.auto", icon: "⚙️" },
+                          {
+                            value: "light",
+                            labelKey: "settings.appearance.light",
+                            icon: "☀️",
+                          },
+                          {
+                            value: "dark",
+                            labelKey: "settings.appearance.dark",
+                            icon: "🌙",
+                          },
+                          {
+                            value: "auto",
+                            labelKey: "settings.appearance.auto",
+                            icon: "⚙️",
+                          },
                         ].map((themeOption) => (
                           <button
                             key={themeOption.value}
@@ -648,7 +717,9 @@ export default function Settings() {
                                 : "border-border hover:border-primary text-muted hover:text-main"
                             }`}
                           >
-                            <div className="text-2xl mb-2">{themeOption.icon}</div>
+                            <div className="text-2xl mb-2">
+                              {themeOption.icon}
+                            </div>
                             <div className="text-[14px] font-medium font-[Inter]">
                               {t(themeOption.labelKey)}
                             </div>
@@ -657,7 +728,7 @@ export default function Settings() {
                       </div>
                     </div>
 
-                    <div>
+                    {/* <div>
                       <h3 className="text-[16px] font-semibold text-main font-[Inter] mb-3">
                         {t("settings.appearance.language")}
                       </h3>
@@ -685,10 +756,10 @@ export default function Settings() {
                         <option value="ja">Japanese</option>
                         <option value="de">German</option>
                       </select>
-                    </div>
+                    </div> */}
                   </div>
 
-                  <div className="flex justify-end gap-4 pt-6 border-t border-border mt-6">
+                  {/* <div className="flex justify-end gap-4 pt-6 border-t border-border mt-6">
                     <button
                       type="button"
                       className="h-[50px] px-6 rounded-xl border border-border bg-card text-main text-[16px] font-medium font-[Inter] hover:bg-canvas-alt"
@@ -719,7 +790,7 @@ export default function Settings() {
                     >
                       {loading ? t("common.saving") : t("common.save_changes")}
                     </button>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             )}
@@ -786,13 +857,17 @@ export default function Settings() {
                                 language: settingsData.appearance.language,
                               },
                             },
-                            { headers: { Authorization: `Bearer ${token}` } }
+                            { headers: { Authorization: `Bearer ${token}` } },
                           );
                           i18n.changeLanguage(settingsData.appearance.language);
-                          toast.success("Language settings updated successfully!");
+                          toast.success(
+                            "Language settings updated successfully!",
+                          );
                         } catch (error) {
                           console.error("Error updating settings:", error);
-                          toast.error("Failed to update settings. Please try again.");
+                          toast.error(
+                            "Failed to update settings. Please try again.",
+                          );
                         } finally {
                           setLoading(false);
                         }
@@ -808,38 +883,103 @@ export default function Settings() {
             )}
             {/* ======= Profile Popup====== */}
             {profilepopup && (
-               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-55 animate-fadeIn">
-
-               <div className="relative bg-gradient-to-br from-white to-slate-100 dark:from-slate-800 dark:to-slate-900 
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-55 animate-fadeIn">
+                <div
+                  className="relative bg-gradient-to-br from-white to-slate-100 dark:from-slate-800 dark:to-slate-900 
                    rounded-3xl p-10 w-[420px] text-center shadow-2xl border border-slate-200 
-                   dark:border-slate-700 transform transition-all duration-300 scale-100 animate-popup">
-
-                 {/* Animated Success Circle */}
-                 <div className="mx-auto mb-6 w-20 h-20 flex items-center justify-center 
+                   dark:border-slate-700 transform transition-all duration-300 scale-100 animate-popup"
+                >
+                  {/* Animated Success Circle */}
+                  <div
+                    className="mx-auto mb-6 w-20 h-20 flex items-center justify-center 
                      rounded-full bg-gradient-to-r from-emerald-400 to-green-500 
-                     shadow-lg animate-bounce">
-                   <span className="text-4xl text-white">✓</span>
-                 </div>
+                     shadow-lg animate-bounce"
+                  >
+                    <span className="text-4xl text-white">✓</span>
+                  </div>
 
-                 {/* Heading */}
-                 <h2 className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 
-                    bg-clip-text text-transparent mb-3">
-                   {t("settings.profile.updated")}
-                 </h2>
+                  {/* Heading */}
+                  <h2
+                    className="text-2xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 
+                    bg-clip-text text-transparent mb-3"
+                  >
+                    {t("settings.profile.updated")}
+                  </h2>
 
-                 {/* Action Button */}
-                 <button
-                   onClick={() => setProfilePopup(false)}
-                   className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 
+                  {/* Action Button */}
+                  <button
+                    onClick={() => setProfilePopup(false)}
+                    className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 
                   text-white rounded-2xl font-semibold 
                   shadow-lg hover:scale-105 hover:shadow-emerald-400/40 
                   transition-all duration-300"
-                 >
-                   {t("common.ok")}
-                 </button>
+                  >
+                    {t("common.ok")}
+                  </button>
+                </div>
+              </div>
+            )}
 
-               </div>
-             </div>
+            {activeSetting === "contactus" && (
+              <div className="max-w-[896px]">
+                <div className="mb-8">
+                  <h1 className="text-[30px] font-bold text-main font-[Inter] mb-2">
+                    {t("settings.contactus.title")}
+                  </h1>
+                  <p className="text-[16px] text-muted font-[Inter]">
+                    {t("settings.contactus.subtitle")}
+                  </p>
+                </div>
+                <div className="bg-card rounded-[24px] shadow-[0_4px_6px_0_rgba(0,0,0,0.10),0_10px_15px_0_rgba(0,0,0,0.10)] p-8">
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-muted mb-2 font-[Inter]">
+                        {t("settings.contactus.subject")}
+                      </label>
+                      <input
+                        type="text"
+                        value={contactForm.subject}
+                        onChange={(e) =>
+                          setContactForm((prev) => ({
+                            ...prev,
+                            subject: e.target.value,
+                          }))
+                        }
+                        placeholder="Enter subject..."
+                        className="w-full h-[50px] px-4 rounded-xl border border-border focus:ring-2 focus:ring-primary bg-input text-main"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-muted mb-2 font-[Inter]">
+                        {t("settings.contactus.message")}
+                      </label>
+                      <textarea
+                        value={contactForm.message}
+                        onChange={(e) =>
+                          setContactForm((prev) => ({
+                            ...prev,
+                            message: e.target.value,
+                          }))
+                        }
+                        rows={6}
+                        placeholder="Describe your issue or question..."
+                        className="w-full px-4 py-3 rounded-xl border border-border focus:ring-2 focus:ring-primary bg-input text-main resize-vertical"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleContactSubmit}
+                        disabled={loading}
+                        className="h-[50px] px-8 rounded-xl bg-gradient-to-r from-primary to-primary text-white font-medium hover:opacity-90 disabled:opacity-50"
+                      >
+                        {loading
+                          ? t("common.loading") + "..."
+                          : t("Send Message")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </main>
         </div>

@@ -2,6 +2,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import helmet from "helmet";
 import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB, sequelize } from "./config/db.js";
@@ -14,13 +15,59 @@ import sidebarRoutes from "./routes/sidebarRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import communityRoutes from "./routes/communityRoutes.js";
 import "./models/CommunityPost.js";
-
+import contactRoutes from "./routes/contactus.js";
+import "./models/ContactMessage.js";
 dotenv.config();
+const app = express();
+/*
+app.disable("x-powered-by");
 
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false, // ⚠️ React/Vite apps me issue avoid
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'", // ⚠️ Dev mode React ke liye needed
+          "https://apis.google.com",
+        ],
+
+        styleSrc: ["'self'", "'unsafe-inline'"],
+
+        imgSrc: ["'self'", "data:", "blob:", "https://images.unsplash.com"],
+
+        connectSrc: [
+          "'self'",
+          process.env.ALLOWED_ORIGIN,
+          "ws://localhost:*", // ⚠️ Vite hot reload fix
+        ],
+
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+
+        objectSrc: ["'none'"],
+
+        frameAncestors: ["'none'"],
+
+        upgradeInsecureRequests: [],
+      },
+    },
+  }),
+);
+
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGIN,
+    credentials: true,
+  }),
+);
+
+app.use(express.json());
+*/
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const app = express();
 
 app.use(express.json());
 
@@ -28,13 +75,10 @@ app.use(
   cors({
     origin: "http://localhost:5173",
     credentials: true,
-  })
+  }),
 );
 
-app.use(
-  "/videos",
-  express.static(path.join(__dirname, "videos"))
-);
+app.use("/videos", express.static(path.join(__dirname, "videos")));
 
 app.get("/", (req, res) => {
   res.send("API is running...");
@@ -51,6 +95,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/sidebar", sidebarRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/community", communityRoutes);
+app.use("/api/contact", contactRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
