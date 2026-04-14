@@ -56,10 +56,14 @@ async function seedCourses() {
         }
 
         // await sequelize.sync({ force: true });
+        await sequelize.sync(); // ensures tables exist
         await Course.truncate({
             cascade: true,
             restartIdentity: true,
         });
+
+        // clear non-FK dependent tables
+        await AIVideo.truncate({ restartIdentity: true });
         console.log("🧹 DB reset done\n");
 
         const coursesData = JSON.parse(fs.readFileSync(coursesPath, "utf8"));
